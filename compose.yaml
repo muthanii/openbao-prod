@@ -1,0 +1,41 @@
+# OpenBao, single node, production configuration.
+#
+#   cp .env.example .env          # set OPENBAO_VERSION
+#   ./scripts/gen-test-certs.sh   # test VM only; use your internal CA in production
+#   docker compose up -d
+#
+# Then follow README.md: initialise, unseal, enable audit, revoke the root token.
+
+services:
+  openbao:
+    # Pin an exact release from https://github.com/openbao/openbao/releases.
+    # A floating tag would upgrade the vault on a restart nobody planned.
+    image: openbao/openbao:${OPENBAO_VERSION:?set OPENBAO_VERSION in .env}
+    container_name: openbao
+    restart: unless-stopped
+    command: server -config=/openbao/config/openbao.hcl
+
+    ports:
+      - "8200:8200"   # API and web UI (HTTPS)
+
+    environment:
+      # For `docker compose exec openbao bao ...` inside the container.
+      BAO_ADDR: https://127.0.0.1:8200
+      BAO_CACERT: /openbao/tls/ca.crt
+
+    volumes:
+      - ./config:/openbao/config:ro
+      - ./tls:/openbao/tls:ro
+      - data:/openbao/file      # Raft storage: every secret lives here
+      - logs:/openbao/logs      # audit log
+
+    # Logs are rotated by Docker so the host disk does not fill up.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  data:
+  logs:
